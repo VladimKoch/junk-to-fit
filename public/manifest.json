@@ -1,0 +1,17 @@
+{
+  "name": "Junk to Fit AI",
+  "short_name": "JunkToFit",
+  "description": "Tvůj osobní AI výživový poradce a skener potravin.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030712",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
