@@ -9,19 +9,24 @@ import { join } from "path";
 // ==========================================
 if (!admin.apps.length) {
   try {
+    // 🚀 MAGICKÝ ČISTIČ KLÍČE: Odstraní omylem přidané uvozovky z Vercelu a opraví odřádkování
+    let formattedKey = process.env.FIREBASE_PRIVATE_KEY || "";
+    formattedKey = formattedKey.replace(/^"|"$/g, '').replace(/\\n/g, '\n');
+
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        // DŮLEŽITÉ: Musíme opravit odřádkování (\n), které se v .env někdy rozbije
-        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        privateKey: formattedKey,
       })
     });
-    console.log("✅ Firebase úspěšně připojen přes .env.local!");
+    console.log("✅ Firebase úspěšně připojen!");
   } catch (err) {
     console.error("❌ Chyba při připojování Firebase:", err);
   }
 }
+
+
 
 const db = admin.firestore();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
