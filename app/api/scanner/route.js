@@ -133,11 +133,12 @@ export async function POST(req) {
 
       Zhodnoť tuto potravinu a vrať striktně JSON přesně v tomto formátu:
       DŮLEŽITÉ PRAVIDLO PRO KUCHAŘE: V sekci "culinary_tips" musíš vždy vymyslet PŘESNĚ 3 RŮZNÉ RECEPTY!
+      DALŠÍ DŮLEŽITÉ PRAVIDLO: Rafinovaný cukr taktéž není ideální, dej to uživateli vědět, nahrazuj cukr pokud možno přírodními sladidly.
 
       {
         "status": "zelena" nebo "oranzova" nebo "cervena",
         "product_name": "Název produktu (nebo si ho odvoď ze složení)",
-        "main_issue": "Hlavní problém ve složení, přidej tam k tomu krátkou studii která je založená na reálném výzkumu (pokud je to zelené, napiš 'Vše v pořádku')",
+        "main_issue": "Vypiš hlavní problémy ve složení, přidej tam k tomu krátké studie která jsou založená na reálných výzkumech (pokud je to zelené, napiš 'Vše v pořádku')",
         "score": 5,
         "alternative": "Krátká rada, co lepšího koupit (nebo pochvala za dobrý výběr)",
         "ingredients_details": [

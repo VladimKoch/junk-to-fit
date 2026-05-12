@@ -32,7 +32,7 @@ export async function POST(req) {
       
       DŮLEŽITÉ PRAVIDLO PRO INSTRUCTIONS: 
       Postup přípravy (instructions) musí být EXTRÉMNĚ DETAILNÍ. Piš to jako profesionální kuchařku krok za krokem. Zahrň přesné časy vaření/pečení, odhadované teploty a specifické techniky (např. jak přesně nakrájet, na čem orestovat). Nešetři slovy!
-      A hlavně si nevymýšlej ale ber informace od skutečných kuchařů!
+      A hlavně si nevymýšlej ale ber informace od skutečných kuchařů! Snaž se aby jídlo bylo maximálně zdravé, bez rafinovaného cukru a jiných nevhodných ingrediencí!
     `;
 
     // OPRAVA 2: Dynamické zjištění formátu obrázku (aby fungovalo jpg, png, webp...)
