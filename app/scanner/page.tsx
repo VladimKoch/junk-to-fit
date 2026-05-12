@@ -34,7 +34,7 @@ export default function ScannerPage() {
 
   const loadingMessages: string[] = [
     "Skenuji čárový kód...",
-    "Spojuji fotky z kulatého obalu...",
+    "Řeším atomární substanci",
     "Hledám skryté cukry a éčka...",
     "Ptám se šéfkuchaře na recepty...",
     "Zhodnocuji tvůj výběr..."
@@ -80,19 +80,43 @@ export default function ScannerPage() {
     setImages((prev) => prev.filter((_, index) => index !== indexToRemove));
   };
 
-  const handleAnalyzeClick = async () => {
+const handleAnalyzeClick = async () => {
     if (images.length === 0) return;
     setIsLoading(true);
     
     try {
+      // 🚀 NOVÁ MAGIE: Zmenšení a komprese fotek přímo v telefonu před odesláním
       const base64Array = await Promise.all(
         images.map(async (imgUrl) => {
-          const response = await fetch(imgUrl);
-          const blob = await response.blob();
           return new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = () => resolve(reader.result as string);
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              let width = img.width;
+              let height = img.height;
+
+              // Zmenšíme fotku tak, aby její delší strana měla max 800px (Bohatě stačí pro AI)
+              const MAX_SIZE = 800;
+              if (width > height && width > MAX_SIZE) {
+                height *= MAX_SIZE / width;
+                width = MAX_SIZE;
+              } else if (height > MAX_SIZE) {
+                width *= MAX_SIZE / height;
+                height = MAX_SIZE;
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+              
+              const ctx = canvas.getContext("2d");
+              // Nakreslíme zmenšenou fotku na neviditelné plátno
+              ctx?.drawImage(img, 0, 0, width, height);
+
+              // Vyexportujeme ji jako JPEG s kvalitou 70% (extrémně sníží velikost souboru v MB)
+              const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+              resolve(compressedBase64);
+            };
+            img.src = imgUrl;
           });
         })
       );
@@ -109,7 +133,7 @@ export default function ScannerPage() {
         const finalData = Array.isArray(data.data) ? data.data[0] : data.data;
         setScanResult(finalData);
         setActiveIngredient(null);
-        setActiveRecipe(null); // Reset aktivního receptu při novém skenu
+        setActiveRecipe(null);
       } else {
         alert("Něco se pokazilo: " + data.error);
       }
@@ -121,6 +145,7 @@ export default function ScannerPage() {
       alert("Nepodařilo se připojit k serveru.");
     }
   };
+
 
   const resetApp = () => {
     setImages([]);

@@ -83,7 +83,7 @@ export default function Home() {
     }
   };
 
-  const handleTransformClick = async () => {
+ const handleTransformClick = async () => {
     // VYPNOUTO PRO VÝVOJ
     // if (credits !== null && credits <= 0) {
     //   setShowPaywall(true); 
@@ -95,35 +95,58 @@ export default function Home() {
     setIsLoading(true);
     
     try {
-      const response = await fetch(image);
-      const blob = await response.blob();
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
+      // 🚀 NOVÁ MAGIE: Zmenšení a komprese fotky pro RECEPTY přímo v telefonu
+      const compressedBase64 = await new Promise<string>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+
+          // Zmenšíme fotku tak, aby její delší strana měla max 800px
+          const MAX_SIZE = 800;
+          if (width > height && width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          } else if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          // Vyexportujeme ji jako JPEG s kvalitou 70% (extrémně sníží velikost v MB)
+          resolve(canvas.toDataURL("image/jpeg", 0.7));
+        };
+        img.src = image;
+      });
       
-      reader.onloadend = async () => {
-        const base64data = reader.result;
-        
-        const apiRes = await fetch("/api/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: base64data, diet: selectedDiet })
-        });
-        
-        const data = await apiRes.json();
-        
-        if (data.success) {
-          setRecipeResult(data.text);
-          // VYPNOUTO PRO VÝVOJ
-          // if (credits !== null) {
-          //   const newCredits = credits - 1;
-          //   setCredits(newCredits);
-          //   localStorage.setItem("junkToFitCredits", newCredits.toString());
-          // }
-        } else {
-          alert("Něco se pokazilo: " + data.error);
-        }
-        setIsLoading(false);
-      };
+      // Odeslání zmenšené fotky na server
+      const apiRes = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: compressedBase64, diet: selectedDiet })
+      });
+      
+      const data = await apiRes.json();
+      
+      if (data.success) {
+        setRecipeResult(data.text);
+        // VYPNOUTO PRO VÝVOJ
+        // if (credits !== null) {
+        //   const newCredits = credits - 1;
+        //   setCredits(newCredits);
+        //   localStorage.setItem("junkToFitCredits", newCredits.toString());
+        // }
+      } else {
+        alert("Něco se pokazilo: " + data.error);
+      }
+      setIsLoading(false);
+      
     } catch (error) {
       console.error(error);
       setIsLoading(false);
