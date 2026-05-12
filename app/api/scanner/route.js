@@ -9,14 +9,20 @@ import { join } from "path";
 // ==========================================
 if (!admin.apps.length) {
   try {
-    // 🚀 MAGICKÝ ČISTIČ KLÍČE: Odstraní omylem přidané uvozovky z Vercelu a opraví odřádkování
+    // 🚀 MAGICKÝ ČISTIČ VŠECH KLÍČŮ Z VERCELU:
     let formattedKey = process.env.FIREBASE_PRIVATE_KEY || "";
     formattedKey = formattedKey.replace(/^"|"$/g, '').replace(/\\n/g, '\n');
 
+    let cleanEmail = process.env.FIREBASE_CLIENT_EMAIL || "";
+    cleanEmail = cleanEmail.replace(/^"|"$/g, '').trim(); // Odstraní uvozovky a mezery
+
+    let cleanProjectId = process.env.FIREBASE_PROJECT_ID || "";
+    cleanProjectId = cleanProjectId.replace(/^"|"$/g, '').trim();
+
     admin.initializeApp({
       credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        projectId: cleanProjectId,
+        clientEmail: cleanEmail,
         privateKey: formattedKey,
       })
     });
