@@ -1,28 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { AppProvider } from "../context/AppContext"; // 👈 Zkontroluj, jestli sedí tečky podle tvých složek! (Případně dej "../../context/AppContext" nebo "@/context/AppContext")
 
-
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-    title: "Junk to Fit",
-  description: "Změň své hříchy na fit recepty",
-  manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "Junk to Fit",
-  },
+  title: "Junk to Fit",
+  description: "Proměň neřest ve zdravý recept.",
 };
 
 export default function RootLayout({
@@ -31,11 +16,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="cs">
+      <body className={inter.className}>
+        {/* 🚀 TADY SE NASTARTOVÁVÁ MOZEK PRO CELOU APLIKACI */}
+        <AppProvider>
+          {children}
+        </AppProvider>
+      </body>
     </html>
   );
 }

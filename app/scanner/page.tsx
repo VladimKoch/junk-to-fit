@@ -1,7 +1,12 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAppContext } from "../../context/AppContext"; // Ujisti se, že import sedí
+import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import { storage } from "../../lib/firebase"; // Zkontroluj tečky!
 
+// 1. DEFINICE TYPŮ PRO TYPESCRIPT
 interface CulinaryTip { name: string; recipe: string[]; }
 interface IngredientDetail { name: string; info: string; }
 interface ScanResultData {
@@ -13,9 +18,24 @@ interface ScanResultData {
   ingredients_details: IngredientDetail[];
   culinary_tips: CulinaryTip[];
 }
+
 type ScanMode = "text" | "ean";
 
 export default function ScannerPage() {
+  const router = useRouter();
+  
+  // 🚀 VYTÁHNEME SI DATA Z NAŠEHO CENTRÁLNÍHO MOZKU
+  const { 
+    credits, 
+    isPremium, 
+    isDarkMode, 
+    toggleTheme, 
+    deductCredit, 
+    setShowLoginModal, 
+    setShowPaywall 
+  } = useAppContext();
+
+  // 2. LOKÁLNÍ STAVY
   const [scanMode, setScanMode] = useState<ScanMode>("ean");
   const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -25,12 +45,7 @@ export default function ScannerPage() {
   const [scanResult, setScanResult] = useState<ScanResultData | null>(null);
 
   const [activeIngredient, setActiveIngredient] = useState<number | null>(null);
-  // OPRAVA: Přidána stavová proměnná pro rozklikávání receptů s TS typem
   const [activeRecipe, setActiveRecipe] = useState<number | null>(null);
-  
-  const [credits, setCredits] = useState<number | null>(null);
-  const [showPaywall, setShowPaywall] = useState<boolean>(false);
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
   const loadingMessages: string[] = [
     "Skenuji čárový kód...",
@@ -40,21 +55,7 @@ export default function ScannerPage() {
     "Zhodnocuji tvůj výběr..."
   ];
 
-  useEffect(() => {
-    const savedCredits = localStorage.getItem("junkToFitCredits");
-    if (savedCredits !== null) setCredits(parseInt(savedCredits, 10));
-    else { localStorage.setItem("junkToFitCredits", "2"); setCredits(2); }
-
-    const savedTheme = localStorage.getItem("junkToFitTheme");
-    if (savedTheme === "light") setIsDarkMode(false);
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    localStorage.setItem("junkToFitTheme", newTheme ? "dark" : "light");
-  };
-
+  // Efekt pro animaci textu při načítání
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isLoading) {
@@ -65,6 +66,7 @@ export default function ScannerPage() {
     return () => clearInterval(interval);
   }, [isLoading, loadingMessages.length]);
 
+  // Focení a přidávání obrázků
   const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && images.length < 4) {
@@ -80,12 +82,19 @@ export default function ScannerPage() {
     setImages((prev) => prev.filter((_, index) => index !== indexToRemove));
   };
 
-const handleAnalyzeClick = async () => {
+  // Odeslání do AI
+  const handleAnalyzeClick = async () => {
+    // KONTROLA KREDITŮ A PREMIA
+    if (!isPremium && credits !== null && credits <= 0) {
+      setShowPaywall(true); 
+      return; 
+    }
+
     if (images.length === 0) return;
     setIsLoading(true);
     
     try {
-      // 🚀 NOVÁ MAGIE: Zmenšení a komprese fotek přímo v telefonu před odesláním
+      // 1. Zmenšíme všechny fotky a uložíme je do pole
       const base64Array = await Promise.all(
         images.map(async (imgUrl) => {
           return new Promise<string>((resolve) => {
@@ -95,7 +104,6 @@ const handleAnalyzeClick = async () => {
               let width = img.width;
               let height = img.height;
 
-              // Zmenšíme fotku tak, aby její delší strana měla max 800px (Bohatě stačí pro AI)
               const MAX_SIZE = 800;
               if (width > height && width > MAX_SIZE) {
                 height *= MAX_SIZE / width;
@@ -109,24 +117,47 @@ const handleAnalyzeClick = async () => {
               canvas.height = height;
               
               const ctx = canvas.getContext("2d");
-              // Nakreslíme zmenšenou fotku na neviditelné plátno
               ctx?.drawImage(img, 0, 0, width, height);
 
-              // Vyexportujeme ji jako JPEG s kvalitou 70% (extrémně sníží velikost souboru v MB)
-              const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
-              resolve(compressedBase64);
+              resolve(canvas.toDataURL("image/jpeg", 0.7));
             };
             img.src = imgUrl;
           });
         })
       );
       
-      const apiRes = await fetch("/api/scanner", {
+      const userId = localStorage.getItem("junkToFitUserId") || "anonym";
+
+      // 🚀 ZMĚNA: Ukládáme VŠECHNY fotky do Firebase Storage najednou
+      let photoUrls: string[] = [];
+      try {
+        const uploadPromises = base64Array.map(async (base64Str, index) => {
+          // Přidali jsme index do názvu, aby se fotky nepřepsaly navzájem
+          const fileName = `scan_${Date.now()}_${index}.jpg`; 
+          const storageRef = ref(storage, `users/${userId}/${fileName}`);
+          
+          await uploadString(storageRef, base64Str, 'data_url');
+          return await getDownloadURL(storageRef);
+        });
+
+        // Počkáme, až se nahrají všechny
+        photoUrls = await Promise.all(uploadPromises);
+        console.log("✅ Všechny fotky etiket uloženy:", photoUrls);
+      } catch (err) {
+        console.error("❌ Chyba při nahrávání etiket:", err);
+      }
+
+      // 🚀 ZMĚNA: Přidáme `photoUrls` (jako pole) do fetch volání
+      const apiRes = await fetch("/api/scanner", { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imagesBase64: base64Array, scanMode: scanMode })
+        body: JSON.stringify({ 
+          imageBase64: base64Array[0], // Pokud má backend stále připraveno brát i jen 1 string
+          allImagesBase64: base64Array, 
+          userId,
+          photoUrls: photoUrls // 👈 Nyní posíláme celé pole odkazů!
+        })
       });
-      
       const data = await apiRes.json();
       
       if (data.success) {
@@ -134,24 +165,33 @@ const handleAnalyzeClick = async () => {
         setScanResult(finalData);
         setActiveIngredient(null);
         setActiveRecipe(null);
+        deductCredit(); 
       } else {
         alert("Něco se pokazilo: " + data.error);
       }
-      setIsLoading(false);
       
     } catch (error) {
       console.error(error);
-      setIsLoading(false);
       alert("Nepodařilo se připojit k serveru.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  const handleHistoryClick = () => {
+    const userId = localStorage.getItem("junkToFitUserId");
+    if (userId && !userId.startsWith("user_")) { 
+      router.push("/history"); 
+    } else {
+      setShowLoginModal(true); 
+    }
+  };
 
   const resetApp = () => {
     setImages([]);
     setScanResult(null);
     setActiveIngredient(null);
-    setActiveRecipe(null); // Reset aktivního receptu při kliknutí na "Skenovat další"
+    setActiveRecipe(null);
   };
 
   const getStatusStyle = (status: string) => {
@@ -230,7 +270,7 @@ const handleAnalyzeClick = async () => {
              </div>
            </div>
 
-           {/* --- KULINÁŘSKÉ TIPY --- */}
+           {/* KULINÁŘSKÉ TIPY */}
            {scanResult.culinary_tips && scanResult.culinary_tips.length > 0 && (
              <div className="w-full max-w-md mb-8">
                <h3 className="text-lg font-bold mb-3 pl-2 text-slate-800 dark:text-gray-200">👨‍🍳 Tipy šéfkuchaře</h3>
@@ -277,13 +317,19 @@ const handleAnalyzeClick = async () => {
     <div className={isDarkMode ? "dark" : ""}>
       <main className="min-h-screen pb-24 bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden transition-colors duration-500">
         
-        <button onClick={toggleTheme} className="absolute top-6 left-6 bg-white/70 dark:bg-gray-900/80 backdrop-blur-md border border-slate-200 dark:border-gray-800/80 w-10 h-10 flex items-center justify-center rounded-full shadow-lg z-20 text-xl">
+        {/* Přepínač Dark/Light Mode */}
+        <button 
+          onClick={toggleTheme} 
+          className="absolute top-6 left-6 bg-white/70 dark:bg-gray-900/80 backdrop-blur-md border border-slate-200 dark:border-gray-800/80 w-10 h-10 flex items-center justify-center rounded-full shadow-lg z-20 text-xl"
+        >
           {isDarkMode ? '☀️' : '🌙'}
         </button>
 
+   
+
         <div className="mb-8 text-center mt-6 z-10">
           <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-slate-900 to-slate-500 dark:from-white dark:via-gray-200 dark:to-gray-500 tracking-tight mb-2">
-            AI <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500 dark:from-emerald-400 dark:to-teal-400">Skener</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500 dark:from-emerald-400 dark:to-teal-400">Skener</span>
           </h1>
           <p className="text-slate-500 dark:text-gray-400 text-sm font-medium">Text je na oválné plechovce? Vyfoť ho po částech!</p>
         </div>
@@ -304,7 +350,6 @@ const handleAnalyzeClick = async () => {
           </div>
         ) : (
           <div className="flex flex-col items-center mb-12 z-10 w-full max-w-sm">
-            
             <div className="flex gap-4 mb-6 w-full overflow-x-auto pb-4 snap-x pt-2">
               {images.map((imgUrl, idx) => (
                 <div key={idx} className="relative shrink-0 snap-center">
@@ -336,18 +381,28 @@ const handleAnalyzeClick = async () => {
           </div>
         )}
 
+        {/* SPODNÍ NAVIGACE */}
         <div className="fixed bottom-0 left-0 w-full bg-white/70 dark:bg-gray-950/70 backdrop-blur-2xl border-t border-slate-200 dark:border-gray-800/60 z-50">
           <div className="flex justify-around items-center p-2 max-w-md mx-auto">
             <Link href="/" className="flex flex-col items-center justify-center w-20 h-14 rounded-2xl text-slate-400 hover:text-lime-500 transition-colors">
               <span className="text-2xl mb-0.5">🍔</span>
               <span className="text-[10px] font-bold uppercase tracking-wider">Recepty</span>
             </Link>
-            <Link href="/scanner" className="flex flex-col items-center justify-center w-20 h-14 rounded-2xl bg-slate-100 dark:bg-gray-900/50 text-emerald-600 dark:text-emerald-400">
+            
+            <Link href="/scanner" className="flex flex-col items-center justify-center w-20 h-14 bg-slate-100 dark:bg-gray-900/50 rounded-2xl text-emerald-600 dark:text-emerald-400 relative">
+              <div className="absolute top-0 w-8 h-1 bg-emerald-500 dark:bg-emerald-400 rounded-b-full shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
               <span className="text-2xl mb-0.5 drop-shadow-md">🔍</span>
               <span className="text-[10px] font-black uppercase tracking-wider">Skener</span>
             </Link>
+
+            <button onClick={handleHistoryClick} className="flex flex-col items-center justify-center w-20 h-14 rounded-2xl text-slate-400 dark:text-gray-500 hover:text-amber-500 dark:hover:text-amber-400 transition-colors relative">
+              {/* {!isPremium && <span className="absolute top-0 right-4 text-xs drop-shadow-md">🔒</span>} */}
+              <span className="text-2xl mb-0.5">📚</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider">Historie</span>
+            </button>
           </div>
         </div>
+
       </main>
     </div>
   );
