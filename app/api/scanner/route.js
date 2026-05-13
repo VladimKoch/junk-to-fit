@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import admin from "firebase-admin";
-import { readFileSync } from "fs";
-import { join } from "path";
 
 // ==========================================
 // 1. INICIALIZACE FIREBASE PŘES .ENV
@@ -32,22 +30,22 @@ if (!admin.apps.length) {
   }
 }
 
-
-
 const db = admin.firestore();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { imagesBase64, scanMode } = body;
+    
+    // 🚀 OPRAVA: Přijímáme správné názvy z frontendu (včetně photoUrls a userId pro historii)
+    const { allImagesBase64, userId, photoUrls } = body;
 
-    if (!imagesBase64 || !Array.isArray(imagesBase64) || imagesBase64.length === 0) {
+    if (!allImagesBase64 || !Array.isArray(allImagesBase64) || allImagesBase64.length === 0) {
       return NextResponse.json({ success: false, error: "Chybí obrázky" }, { status: 400 });
     }
 
-    // Příprava obrázků pro Gemini
-    const imageParts = imagesBase64.map((base64Str) => {
+    // Příprava VŠECH obrázků pro Gemini
+    const imageParts = allImagesBase64.map((base64Str) => {
       const mimeType = base64Str.substring(base64Str.indexOf(":") + 1, base64Str.indexOf(";"));
       const data = base64Str.split(",")[1];
       return { inlineData: { data, mimeType } };
@@ -74,8 +72,61 @@ export async function POST(req) {
       const doc = await productRef.get();
 
       if (doc.exists) {
-        console.log("🚀 Načteno rovnou z Firebase!");
-        return NextResponse.json({ success: true, data: doc.data().ai_result });
+        console.log("🚀 Produkt nalezen v DB! Generuji čerstvé a unikátní recepty...");
+        const dbData = doc.data();
+        let aiData = dbData.ai_result;
+        
+        try {
+          // Rychlý a levný textový dotaz na novou inspiraci (bez fotek!)
+          const recipeModel = genAI.getGenerativeModel({
+            model: "gemini-2.0-flash",
+            generationConfig: { responseMimeType: "application/json" }
+          });
+
+          const recipePrompt = `
+            Jsi kreativní šéfkuchař. Vymysli 3 ZCELA NOVÉ, originální a zdravé recepty, kde hraje hlavní roli tato ingredience/produkt: "${dbData.product_name}".
+            Složení produktu je: ${dbData.ingredients}.
+            
+            PRAVIDLA:
+            1. Musí to být jiné recepty, než jaké se běžně dělají. Buď kreativní!
+            2. Vše musí být maximálně zdravé, bez rafinovaného cukru.
+            3. Používej rady o výživě od Ellen Gould Whiteové (ale nezmiňuj ji).
+            
+            Vrať POUZE JSON pole (bez Markdownu kolem) přesně v tomto formátu:
+            [
+              {
+                "name": "1. Název tvého nového receptu",
+                "recipe": [
+                  "První detailní krok přípravy...",
+                  "Druhý detailní krok přípravy..."
+                ]
+              }
+            ]
+          `;
+          
+          const recipeResult = await recipeModel.generateContent(recipePrompt);
+          const freshRecipes = JSON.parse(recipeResult.response.text());
+
+          // Nahradíme staré nudné recepty z databáze těmi zbrusu novými!
+          if (Array.isArray(freshRecipes) && freshRecipes.length > 0) {
+            aiData.culinary_tips = freshRecipes;
+          }
+        } catch (recipeErr) {
+          console.error("⚠️ Nepodařilo se vygenerovat nové recepty, použijí se staré:", recipeErr);
+        }
+        
+        // 🚀 UKLÁDÁNÍ DO HISTORIE UŽIVATELE
+        try {
+          await db.collection('scans').add({
+            userId: userId || "anonym",
+            photoUrls: photoUrls || [], 
+            product_name: aiData.product_name || "Neznámý produkt",
+            ai_data: aiData, // Ukládáme to do historie už i s těmi novými recepty!
+            created_at: admin.firestore.FieldValue.serverTimestamp()
+          });
+        } catch (e) { console.error("Chyba historie:", e); }
+
+        return NextResponse.json({ success: true, data: aiData });
       }
 
       try {
@@ -92,7 +143,6 @@ export async function POST(req) {
     if (!extractedData || extractedData.length < 10) {
       console.log("🤖 Čtu a spojuji data z fotek...");
       
-      // Nastavíme JSON formát i pro vizuální čtení, ať z toho bezpečně vyndáme EAN!
       const visualModel = genAI.getGenerativeModel({
         model: "gemini-2.0-flash",
         generationConfig: { responseMimeType: "application/json" }
@@ -104,7 +154,8 @@ export async function POST(req) {
         {
           "product_name": "Název produktu (nebo zjištěný z obalu)",
           "ingredients": "Pozorně přečti složení ze VŠECH fotek a logicky ho spoj dohromady do jednoho plynulého textu v češtině. Uvědom si, že text může na okraji jedné fotky končit a na další plynule pokračovat.",
-          "ean": "Pokud na fotkách najdeš čárový kód (EAN), napiš sem jeho číslo. Jinak null."
+          "ean": "Pokud na fotkách najdeš čárový kód (EAN), napiš sem jeho číslo. Jinak null.",
+          "stats":"Pokud na fotkách najdeš hodnoty energetické nebo gramy napiš je taktéž. A udělej z toho kalorický součet podle nejmodernějších studii. Hlavně si nevymýšlej, pokud nebudeš mít k tomu co říct tak nic nepiš."
         }
       `;
       
@@ -114,7 +165,6 @@ export async function POST(req) {
       extractedData = visualDataParsed.ingredients || "";
       productName = visualDataParsed.product_name || "Zjištěno z fotografií";
       
-      // Pokud Krok 1 nenašel EAN, ale Krok 3 ano, zachráníme ho!
       if (!eanNumberForDb && visualDataParsed.ean) {
         eanNumberForDb = String(visualDataParsed.ean).replace(/\D/g, "");
       }
@@ -131,10 +181,13 @@ export async function POST(req) {
       Název: ${productName}
       Složení: ${extractedData}
 
-      Zhodnoť tuto potravinu a vrať striktně JSON přesně v tomto formátu:
       DŮLEŽITÉ PRAVIDLO PRO KUCHAŘE: V sekci "culinary_tips" musíš vždy vymyslet PŘESNĚ 3 RŮZNÉ RECEPTY!
       DALŠÍ DŮLEŽITÉ PRAVIDLO: Rafinovaný cukr taktéž není ideální, dej to uživateli vědět, nahrazuj cukr pokud možno přírodními sladidly.
-
+      DALŠÍ PRAVIDLO: Taktéž rozlišuj závadné éčka, popřípadě je vypisuj proč jsou závadné.
+      DALŠÍ DŮLEŽITÉ PRAVIDLO: Používej taktéž rady o potravinách a výživě ze všech knih o stravování od Ellen Gould Whiteové. Nicméně ji nikde nezmiňuj.
+      POSLEDNÍ DŮLEŽITÉ PRAVIDLO: Každou ingredienci více popiš, odborný rozbor, jak je pro člověka užitečná nebo neužitečná.
+      
+      Zhodnoť tuto potravinu a vrať striktně JSON přesně v tomto formátu:
       {
         "status": "zelena" nebo "oranzova" nebo "cervena",
         "product_name": "Název produktu (nebo si ho odvoď ze složení)",
@@ -160,23 +213,36 @@ export async function POST(req) {
     const finalDataParsed = JSON.parse(finalResult.response.text());
 
     // ==========================================
-    // FÁZE 5: ULOŽENÍ DO FIREBASE PRO PŘÍŠTĚ
+    // FÁZE 5: ULOŽENÍ DO GLOBÁLNÍ DATABÁZE PRODUKTŮ
     // ==========================================
-    // Odstraněna striktní podmínka na 'scanMode'. Nyní se to uloží VŽDY, když máme EAN.
     if (eanNumberForDb && eanNumberForDb.length >= 8) {
       try {
-        // Použijeme .doc(ean).set(), aby se stejný produkt neukládal do DB vícekrát jako duplikát
         await db.collection('products').doc(eanNumberForDb).set({
           ean: eanNumberForDb,
-          product_name: finalDataParsed.product_name || productName, // Vezme finální uhlazený název od AI
-          ingredients: extractedData, // Surový text složení, aby bylo vidět, z čeho AI vycházela
-          ai_result: finalDataParsed, // KOMPLETNÍ JSON SE VŠEMI DATY, CO AI VYPRACOVALA
-          created_at: admin.firestore.FieldValue.serverTimestamp() // Časové razítko
+          product_name: finalDataParsed.product_name || productName,
+          ingredients: extractedData,
+          ai_result: finalDataParsed,
+          created_at: admin.firestore.FieldValue.serverTimestamp()
         });
-        console.log(`✅ Nové jídlo (${eanNumberForDb}) úspěšně uloženo do Firebase!`);
       } catch (dbErr) {
-        console.error("❌ Chyba při ukládání do Firebase:", dbErr);
+        console.error("❌ Chyba při ukládání do Firebase (products):", dbErr);
       }
+    }
+
+    // ==========================================
+    // 🚀 FÁZE 6: ULOŽENÍ DO OSOBNÍ HISTORIE UŽIVATELE
+    // ==========================================
+    try {
+      await db.collection('scans').add({
+        userId: userId || "anonym",
+        photoUrls: photoUrls || [], // 👈 Zde ukládáme pole odkazů z cloudu!
+        product_name: finalDataParsed.product_name || productName,
+        ai_data: finalDataParsed, // Výsledek pro zobrazení v historii
+        created_at: admin.firestore.FieldValue.serverTimestamp()
+      });
+      console.log(`✅ Sken úspěšně uložen do osobní historie uživatele!`);
+    } catch (historyErr) {
+      console.error("❌ Chyba při ukládání do historie uživatele:", historyErr);
     }
 
     return NextResponse.json({ success: true, data: finalDataParsed });
