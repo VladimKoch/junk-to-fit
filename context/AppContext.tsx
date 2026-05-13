@@ -14,7 +14,7 @@ const AppContext = createContext<any>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [credits, setCredits] = useState<number | null>(null);
-  const [isPremium, setIsPremium] = useState<boolean>(false); // Na startu není premium
+  const [isPremium, setIsPremium] = useState<boolean>(true); // Na startu není premium
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
   
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
@@ -48,8 +48,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           console.log("Vytvořen nový anonymní účet s UID:", userCred.user.uid);
           
           // Je to úplný nováček, dáme mu 4 kredity
-          localStorage.setItem("junkToFitCredits", "4");
-          setCredits(4);
+          localStorage.setItem("junkToFitCredits", "100");
+          setCredits(100);
         } catch (error) {
           console.error("Chyba při anonymním přihlášení:", error);
         }

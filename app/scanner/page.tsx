@@ -344,7 +344,7 @@ export default function ScannerPage() {
             >
               <span className="text-6xl mb-4">📸</span>
               <span className="text-lg font-black tracking-wide text-slate-800 dark:text-gray-200 text-center px-4">
-                Vyfoť Čárkový kód nebo složení, čím více fotek tím lépe.
+                Vyfoť Čárkový kód a složení, čím více fotek tím lépe.
               </span>
             </button>
           </div>
