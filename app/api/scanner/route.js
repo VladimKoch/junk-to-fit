@@ -181,11 +181,13 @@ export async function POST(req) {
       Název: ${productName}
       Složení: ${extractedData}
 
-      DŮLEŽITÉ PRAVIDLO PRO KUCHAŘE: V sekci "culinary_tips" musíš vždy vymyslet PŘESNĚ 3 RŮZNÉ RECEPTY!
-      DALŠÍ DŮLEŽITÉ PRAVIDLO: Rafinovaný cukr taktéž není ideální, dej to uživateli vědět, nahrazuj cukr pokud možno přírodními sladidly.
-      DALŠÍ PRAVIDLO: Taktéž rozlišuj závadné éčka, popřípadě je vypisuj proč jsou závadné.
-      DALŠÍ DŮLEŽITÉ PRAVIDLO: Používej taktéž rady o potravinách a výživě ze všech knih o stravování od Ellen Gould Whiteové. Nicméně ji nikde nezmiňuj.
-      POSLEDNÍ DŮLEŽITÉ PRAVIDLO: Každou ingredienci více popiš, odborný rozbor, jak je pro člověka užitečná nebo neužitečná.
+      Pravidla:
+      DŮLEŽITÉ PRAVIDLO: Používej taktéž rady o potravinách a výživě ze všech knih o stravování od Ellen Gould Whiteové. Nicméně ji nikde nezmiňuj.
+      V sekci "culinary_tips" musíš vždy vymyslet PŘESNĚ 3 RŮZNÉ RECEPTY! Snaž se být neustále originální a vymýšlet nové recepty!
+      Rafinovaný cukr taktéž není ideální, dej to uživateli vědět, nahrazuj cukr pokud možno přírodními sladidly.
+      Taktéž rozlišuj závadné éčka, popřípadě je vypisuj proč jsou závadné.
+      Každou ingredienci více popiš, odborný rozbor, jak je pro člověka užitečná nebo neužitečná.
+    
       
       Zhodnoť tuto potravinu a vrať striktně JSON přesně v tomto formátu:
       {

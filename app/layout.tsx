@@ -8,7 +8,12 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Junk to Fit",
   description: "Proměň neřest ve zdravý recept.",
+  
+  icons: {
+      apple: "/icon.png?v=2", // 👈 Ten ?v=2 tam dej, to je nejdůležitější!
+    },
 };
+
 
 export default function RootLayout({
   children,
