@@ -42,7 +42,8 @@ export async function POST(req) {
 
  const prompt = `
       Jsi expert na výživu a profesionální šéfkuchař. Zanalyzuj přiloženou fotku jídla.
-      Na základě fotky vytvoř co nejvíce zdravou variantu chuťově stejnou.
+      Na základě fotky vytvoř co nejvíce zdravou variantu chuťově stejnou
+      Snaž se být neustále originální a vymýšlet nové recepty!
       DŮLEŽITÉ PRAVIDLO: Používej taktéž rady o potravinách a výživě ze všech knih o stravování od Ellen Gould Whiteové. Nicméně ji nikde nezmiňuj.
       Zohledni dietu: ${diet ? diet : "Žádná specifická dieta"}.
       
